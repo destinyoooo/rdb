@@ -54,6 +54,9 @@ func MemoryProfile(rdbFilename string, csvFilename string, options ...interface{
 		return expiration.Format(time.RFC3339)
 	}
 	return dec.Parse(func(object model.RedisObject) bool {
+		if !matchBigKey(object) {
+			return true
+		}
 		err = csvWriter.Write([]string{
 			strconv.Itoa(object.GetDBIndex()),
 			object.GetKey(),
@@ -70,4 +73,31 @@ func MemoryProfile(rdbFilename string, csvFilename string, options ...interface{
 		}
 		return true
 	})
+}
+
+func matchBigKey(obj model.RedisObject) bool {
+	//禁止使用大Key。要求String大小≤10kb，Hash字段数≤1000或大小≤100kb，List元素数量≤1000，Set成员数量≤1000，ZSet成员数量≤1000。
+	switch obj.GetType() {
+	case model.StringType:
+		if obj.GetSize() > 10*1024 {
+			return true
+		}
+	case model.ListType:
+		if obj.GetElemCount() > 1000 {
+			return true
+		}
+	case model.HashType:
+		if obj.GetElemCount() > 1000 || obj.GetSize() > 100*1024 {
+			return true
+		}
+	case model.SetType:
+		if obj.GetElemCount() > 1000 {
+			return true
+		}
+	case model.ZSetType:
+		if obj.GetElemCount() > 1000 {
+			return true
+		}
+	}
+	return false
 }
