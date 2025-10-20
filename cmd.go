@@ -64,6 +64,7 @@ func main() {
 	var seps separators
 	var regexExpr string
 	var noExpired bool
+	var keySizeFilter bool
 	var expirationExpr string
 	var maxDepth int
 	var concurrent int
@@ -78,6 +79,7 @@ func main() {
 	flagSet.StringVar(&regexExpr, "regex", "", "regex expression")
 	flagSet.StringVar(&expirationExpr, "expire", "", "expiration filter expression")
 	flagSet.BoolVar(&noExpired, "no-expired", false, "filter expired keys(deprecated, please use expire)")
+	flagSet.BoolVar(&keySizeFilter, "key-size-filter", false, "filter keys by its size")
 	_ = flagSet.Parse(os.Args[1:]) // ExitOnError
 	src := flagSet.Arg(0)
 
@@ -102,6 +104,9 @@ func main() {
 	}
 	if expirationExpr != "" {
 		options = append(options, helper.WithExpirationOption(expirationExpr))
+	}
+	if keySizeFilter {
+		options = append(options, helper.WithKeySizeFilterOption())
 	}
 
 	var outputFile *os.File

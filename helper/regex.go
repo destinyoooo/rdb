@@ -74,6 +74,52 @@ func WithNoExpiredOption() NoExpiredOption {
 	return NoExpiredOption(true)
 }
 
+type keySizeFilterDecoder struct {
+	dec decoder
+}
+
+func (d *keySizeFilterDecoder) Parse(cb func(object model.RedisObject) bool) error {
+	return d.dec.Parse(func(object model.RedisObject) bool {
+		if matchBigKey(object) {
+			return cb(object)
+		}
+		return true
+	})
+}
+
+func matchBigKey(obj model.RedisObject) bool {
+	//禁止使用大Key。要求String大小≤10kb，Hash字段数≤1000或大小≤100kb，List元素数量≤1000，Set成员数量≤1000，ZSet成员数量≤1000。
+	switch obj.GetType() {
+	case model.StringType:
+		if obj.GetSize() > 10*1024 {
+			return true
+		}
+	case model.ListType:
+		if obj.GetElemCount() > 1000 {
+			return true
+		}
+	case model.HashType:
+		if obj.GetElemCount() > 1000 || obj.GetSize() > 100*1024 {
+			return true
+		}
+	case model.SetType:
+		if obj.GetElemCount() > 1000 {
+			return true
+		}
+	case model.ZSetType:
+		if obj.GetElemCount() > 1000 {
+			return true
+		}
+	}
+	return false
+}
+
+type KeySizeFilterOption bool
+
+func WithKeySizeFilterOption() KeySizeFilterOption {
+	return KeySizeFilterOption(true)
+}
+
 type ExpirationOption string
 
 func WithExpirationOption(expr string) ExpirationOption {
@@ -147,6 +193,7 @@ func wrapDecoder(dec decoder, options ...interface{}) (decoder, error) {
 	var regexOpt RegexOption
 	var noExpiredOpt NoExpiredOption
 	var expirationOpt ExpirationOption
+	var keySizeFilterOpt KeySizeFilterOption
 	for _, opt := range options {
 		switch o := opt.(type) {
 		case RegexOption:
@@ -155,6 +202,8 @@ func wrapDecoder(dec decoder, options ...interface{}) (decoder, error) {
 			noExpiredOpt = o
 		case ExpirationOption:
 			expirationOpt = o
+		case KeySizeFilterOption:
+			keySizeFilterOpt = o
 		}
 	}
 	if regexOpt != nil {
@@ -166,6 +215,11 @@ func wrapDecoder(dec decoder, options ...interface{}) (decoder, error) {
 	}
 	if noExpiredOpt {
 		dec = &noExpiredDecoder{
+			dec: dec,
+		}
+	}
+	if keySizeFilterOpt {
+		dec = &keySizeFilterDecoder{
 			dec: dec,
 		}
 	}
